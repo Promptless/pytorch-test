@@ -1,4 +1,6 @@
-Frequently Asked Questions
+    ==== UPDATED DOCUMENT CONTENT ====
+
+    Frequently Asked Questions
 ==========================
 **Author**: `Mark Saroufim <https://github.com/msaroufim>`_
 
@@ -87,6 +89,8 @@ succeeded.
 1. ``torch.compile(..., backend="eager")`` which only runs TorchDynamo
    forward graph capture and then runs the captured graph with PyTorch.
    If this fails then there’s an issue with TorchDynamo.
+
+Note: The functions `torch._utils.is_compiling()` and `torch._dynamo.external_utils.is_compiling()` are deprecated. Use `torch.compiler.is_compiling()` instead.
 
 2. ``torch.compile(..., backend="aot_eager")``
    which runs TorchDynamo to capture a forward graph, and then AOTAutograd
@@ -592,49 +596,7 @@ How do I debug NumPy code under ``torch.compile``?
 Debugging JIT compiled code is challenging, given the complexity of modern
 compilers and the daunting errors that they raise.
 `The tutorial on how to diagnose runtime errors within torch.compile <https://pytorch.org/docs/main/torch.compiler_troubleshooting.html#diagnosing-runtime-errors>`__
-contains a few tips and tricks on how to tackle this task.
-
-If the above is not enough to pinpoint the origin of the issue, there are still
-a few other NumPy-specific tools we can use. We can discern whether the bug
-is entirely in the PyTorch code by disabling tracing through NumPy functions:
-
-
-.. code-block:: python
-
-   from torch._dynamo import config
-   config.trace_numpy = False
-
-If the bug lies in the traced NumPy code, we can execute the NumPy code eagerly (without ``torch.compile``)
-using PyTorch as a backend by importing ``import torch._numpy as np``.
-This should just be used for **debugging purposes** and is in no way a
-replacement for the PyTorch API, as it is **much less performant** and, as a
-private API, **may change without notice**. At any rate, ``torch._numpy`` is a
-Python implementation of NumPy in terms of PyTorch and it is used internally by ``torch.compile`` to
-transform NumPy code into Pytorch code. It is rather easy to read and modify,
-so if you find any bug in it feel free to submit a PR fixing it or simply open
-an issue.
-
-If the program does work when importing ``torch._numpy as np``, chances are
-that the bug is in TorchDynamo. If this is the case, please feel open an issue
-with a `minimal reproducer <https://pytorch.org/docs/2.1/torch.compiler_troubleshooting.html>`__.
-
-I ``torch.compile`` some NumPy code and I did not see any speed-up.
--------------------------------------------------------------------
-
-The best place to start is the
-`tutorial with general advice for how to debug these sort of torch.compile issues <https://pytorch.org/docs/main/torch.compiler_faq.html#why-am-i-not-seeing-speedups>`__.
-
-Some graph breaks may happen because of the use of unsupported features. See
-:ref:`nonsupported-numpy-feats`. More generally, it is useful to keep in mind
-that some widely used NumPy features do not play well with compilers. For
-example, in-place modifications make reasoning difficult within the compiler and
-often yield worse performance than their out-of-place counterparts.As such, it is best to avoid
-them. Same goes for the use of the ``out=`` parameter. Instead, prefer
-out-of-place ops and let ``torch.compile`` optimize the memory use. Same goes
-for data-dependent ops like masked indexing through boolean masks, or
-data-dependent control flow like ``if`` or ``while`` constructions.
-
-
+contains a few tips and tricks on how to tackle this task.```
 Which API to use for fine grain tracing?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -682,6 +644,7 @@ You most likely need ``torch._dynamo.disable``. But in an unlikely scenario, you
 might need even finer control. Suppose you want to disable the tracing on just
 the ``a_fn`` function, but want to continue the tracing back in ``aa_fn`` and
 ``ab_fn``. The image below demonstrates this use case:
+```
 
 
 .. figure:: _static/img/fine_grained_apis/call_stack_diagram.png
