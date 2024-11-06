@@ -11,11 +11,11 @@ TorchDynamo APIs for fine-grained tracing
 However, it is possible that a small part of the model code cannot be
 handled by ``torch.compiler``. In this case, you might want to disable
 the compiler on that particular portion, while running compilation on
-the rest of the model. This section describe the existing APIs that
-use to define parts of your code in which you want to skip compilation
+the rest of the model. This section describes the existing APIs that
+you can use to define parts of your code in which you want to skip compilation
 and the relevant use cases.
 
-The API that you can use to define portions of the code on which you can
+The APIs that you can use to define portions of the code on which you can
 disable compilation are listed in the following table:
 
 .. csv-table:: TorchDynamo APIs to control fine-grained tracing
@@ -26,7 +26,7 @@ disable compilation are listed in the following table:
    "``torch._dynamo.disallow_in_graph``", "Disallows the marked op in the TorchDynamo graph. TorchDynamo causes graph break, and runs the op in the eager (no compile) mode.\n\nThis is suitable for the ops, while ``torch.compiler.disable`` is suitable for decorating functions.", "This API is excellent for both debugging and unblocking if a custom op like ``torch.ops.fbgemm.*`` is causing issues with the ``torch.compile`` function."
    "``torch.compile.allow_in_graph``", "The annotated callable goes as is in the TorchDynamo graph. For example, a black-box for TorchDynamo Dynamo.\n\nNote that AOT Autograd will trace through it, so the ``allow_in_graph`` is only a Dynamo-level concept.", "This API is useful for portions of the model which have known TorchDynamo hard-to-support features, like hooks or ``autograd.Function``. However, each usage of ``allow_in_graph`` **must be carefully screened** (no graph breaks, no closures)."
    "``torch._dynamo.graph_break``", "Adds a graph break. The code before and after the graph break goes through TorchDynamo.", "**Rarely useful for deployment** - If you think you need this, most probably you need either ``disable`` or ``disallow_in_graph``."
-   "``torch.compiler.is_compiling``", "Indicates whether a graph is executed/traced as part of torch.compile() or torch.export()."
+   "``torch.compiler.is_compiling``", "Indicates whether a graph is executed/traced as part of torch.compile() or torch.export(). Use this to check if the current execution is within a compiled context."
    "``torch.compiler.is_dynamo_compiling``", "Indicates whether a graph is traced via TorchDynamo. It's stricter than torch.compiler.is_compiling() flag, as it would only be set to True when TorchDynamo is used."
 
 ``torch.compiler.disable``
@@ -48,8 +48,7 @@ To skip compilation, you can decorate the offending function with
 ``@torch.compiler.disable``.
 
 You can also use the non-decorator syntax if you don’t want to change the source
-code
-However, we recommend that you avoid this style if possible. Here, you have to
+code. However, we recommend that you avoid this style if possible. Here, you have to
 take care that all users of the original function are now using the patched
 version.
 
