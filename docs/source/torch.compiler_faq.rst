@@ -1,6 +1,4 @@
-    ==== UPDATED DOCUMENT CONTENT ====
-
-    Frequently Asked Questions
+Frequently Asked Questions
 ==========================
 **Author**: `Mark Saroufim <https://github.com/msaroufim>`_
 
@@ -89,8 +87,6 @@ succeeded.
 1. ``torch.compile(..., backend="eager")`` which only runs TorchDynamo
    forward graph capture and then runs the captured graph with PyTorch.
    If this fails then there’s an issue with TorchDynamo.
-
-Note: The functions `torch._utils.is_compiling()` and `torch._dynamo.external_utils.is_compiling()` are deprecated. Use `torch.compiler.is_compiling()` instead.
 
 2. ``torch.compile(..., backend="aot_eager")``
    which runs TorchDynamo to capture a forward graph, and then AOTAutograd
@@ -607,26 +603,26 @@ you can find more information in :ref:`torchdynamo_fine_grain_tracing`.
 How do I graph break on a function?
 -----------------------------------
 
-Graph break on a function is not enough to sufficiently express what you  want
+Graph break on a function is not enough to sufficiently express what you want
 PyTorch to do. You need to be more specific about your use case. Some of the
 most common use cases you might want to consider:
 
 * If you want to disable compilation on this function frame and the recursively
-  invoked frames, use ``torch._dynamo.disable``.
+  invoked frames, use ``torch.compiler.disable``.
 
-* If you want a particular operator, such as ``fbgemm`` to use the  eager mode,
-  use ``torch._dynamo.disallow_in_graph``.
+* If you want a particular operator, such as ``fbgemm`` to use the eager mode,
+  use ``torch.compiler.disallow_in_graph``.
 
 Some of the uncommon use cases include:
 
 * If you want to disable TorchDynamo on the function frame but enable it back
-  on the recursively invoked frames – use ``torch._dynamo.disable(recursive=False)``.
+  on the recursively invoked frames – use ``torch.compiler.disable(recursive=False)``.
 
-* If you want to prevent inlining of a function frame – use ``torch._dynamo.graph_break``
+* If you want to prevent inlining of a function frame – use ``torch.compiler.graph_break``
   at the beginning of the function you want to prevent inlining.
 
-What's the difference between ``torch._dynamo.disable`` and ``torch._dynamo.disallow_in_graph``
------------------------------------------------------------------------------------------------
+What's the difference between ``torch.compiler.disable`` and ``torch.compiler.disallow_in_graph``
+-------------------------------------------------------------------------------------------------
 
 Disallow-in-graph works at the level of operators, or more specifically,
 the operators that you see in the TorchDynamo extracted graphs.
@@ -634,13 +630,13 @@ the operators that you see in the TorchDynamo extracted graphs.
 Disable works at the function frame level and decides if TorchDynamo
 should look into the function frame or not.
 
-What's the difference between ``torch._dynamo.disable`` and ``torch._dynamo_skip``
-----------------------------------------------------------------------------------
+What's the difference between ``torch.compiler.disable`` and ``torch.compiler_skip``
+------------------------------------------------------------------------------------
 
 .. note::
-   ``torch._dynamo_skip`` is deprecated.
+   ``torch.compiler_skip`` is deprecated.
 
-You most likely need ``torch._dynamo.disable``. But in an unlikely scenario, you
+You most likely need ``torch.compiler.disable``. But in an unlikely scenario, you
 might need even finer control. Suppose you want to disable the tracing on just
 the ``a_fn`` function, but want to continue the tracing back in ``aa_fn`` and
 ``ab_fn``. The image below demonstrates this use case:

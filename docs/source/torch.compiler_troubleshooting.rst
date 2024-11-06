@@ -357,23 +357,125 @@ through an example.
 
    import torch
 
-   import torch._dynamo as dynamoIn order to run the code after TorchDynamo has traced the forward graph,
-you can use the ``TORCH_COMPILE_REPRO_AFTER`` environment variable. Running
-this program with ``TORCH_COMPILE_REPRO_AFTER="dynamo"`` (or
-``torch.compiler.config.repro_after="dynamo"``) should produce `this
-output <https://gist.github.com/mlazos/244e3d5b53667e44078e194762c0c92b>`__\ and
-the following code in ``{torch.compiler.config.base_dir}/repro.py``.
+   import torch._dynamo as dynamo
 
-.. note:: The other option for TORCH_COMPILE_REPRO_AFTER is ``"aot"``, which
+   model = torch.nn.Sequential(*[torch.nn.Linear(200, 200) for _ in range(5)])
+   # toy compiler which fails if graph contains relu
+   def toy_compiler(gm: torch.fx.GraphModule, _):
+       for node in gm.graph.nodes:
+           if node.target == torch.relu:
+               assert False
+
+       return gm
+
+
+   def test_backend_error():
+       y = torch.ones(200, 200)
+       x = torch.ones(200, 200)
+       z = x + y
+       a = torch.relu(z)
+       return model(a)
+
+
+   compiled_test_backend_error = torch.compile(test_backend_error, backend=toy_compiler)
+   compiled_test_backend_error()
+
+In order to run the code after TorchDynamo has traced the forward graph,
+you can use the ``TORCHDYNAMO_REPRO_AFTER`` environment variable. Running
+this program with ``TORCHDYNAMO_REPRO_AFTER="dynamo"`` (or
+``torch._dynamo.config.repro_after="dynamo"``) should produce `this
+output <https://gist.github.com/mlazos/244e3d5b53667e44078e194762c0c92b>`__\ and
+the following code in ``{torch._dynamo.config.base_dir}/repro.py``.
+
+.. note:: The other option for TORCHDYNAMO_REPRO_AFTER is ``"aot"``, which
    will run the minifier after the backward graph has been generated.
+
+.. code-block:: python
+
+   import torch
+   import torch._dynamo as dynamo
+   from torch import tensor, device
+   import torch.fx as fx
+   from torch._dynamo.testing import rand_strided
+   from math import inf
+   from torch._dynamo.debug_utils import run_fwd_maybe_bwd
+
+   from torch.nn import *
+
+   class Repro(torch.nn.Module):
+       def __init__(self):
+           super().__init__()
+
+       def forward(self, add):
+           relu = torch.relu(add);  add = None
+           return (relu,)
+
+
+   mod = Repro().cuda()
+   opt_mod = torch.compile(mod, backend="None")
+
+
+   args = [((200, 200), (200, 1), torch.float32, 'cpu', False)]
+   args = [rand_strided(sh, st, dt, dev).requires_grad_(rg) for (sh, st, dt, dev, rg) in args]
+
+
+   with torch.cuda.amp.autocast(enabled=False):
+       ref = run_fwd_maybe_bwd(mod, args)
+       res = run_fwd_maybe_bwd(opt_mod, args)
 
 The minifier successfully reduced the graph to the op that raises the
 error in ``toy_compiler``. The other difference from the procedure in
 `TorchInductor Errors <#torchinductor-errors>`__ is that the minifier is
 automatically run after encountering a backend compiler error. After a
 successful run, the minifier writes ``repro.py`` to
-``torch.compiler.config.base_dir``.
-```
+``torch._dynamo.config.base_dir``.
+
+Performance Profiling
+~~~~~~~~~~~~~~~~~~~~~
+
+Accessing TorchDynamo Profiler
+------------------------------
+
+TorchDynamo has a built-in stats function for collecting and displaying
+the time spent in each compilation phase. These stats can be accessed by
+calling ``torch._dynamo.utils.compile_times()`` after executing
+Torch._Dynamo. By default, this returns a string representation of the
+compile times spent in each TorchDynamo function by name.
+
+TorchInductor Debugging using TORCH_COMPILE_DEBUG
+-------------------------------------------------
+
+TorchInductor has a builtin stats and trace function for displaying time
+spent in each compilation phase, output code, output graph visualization
+and IR dump. This is a debugging tool designed to make it easier to
+understand and troubleshoot the internals of TorchInductor.
+
+Let's run an example with the following test program (``repro.py``):
+
+::
+
+  import torch
+
+  @torch.compile()
+  def test_model(x):
+      model = torch.nn.Sequential(
+          torch.nn.Linear(10, 10),
+          torch.nn.LayerNorm(10),
+          torch.nn.ReLU(),
+      )
+      return model(x)
+
+
+  y = test_model(torch.ones(10, 10))
+
+Setting the environment variable ``TORCH_COMPILE_DEBUG=1`` will cause a
+debug trace directory to be created, by default this directory will be in the
+current directory and named torch_compile_debug (this can be overridden in
+the torchdynamo configuration field ``debug_dir_root`` and also the
+``env var TORCH_COMPILE_DEBUG_DIR``). Inside this directory, each run will
+have a separate folder named with the timestamp and process id of the run:
+
+::
 
    $ env TORCH_COMPILE_DEBUG=1 python repro.py
    $ cd torch_compile_debug
