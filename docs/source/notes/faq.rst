@@ -91,94 +91,16 @@ PyTorch uses a caching memory allocator to speed up memory allocations. As a
 result, the values shown in ``nvidia-smi`` usually don't reflect the true
 memory usage. See :ref:`cuda-memory-management` for more details about GPU
 memory management.
-
-If your GPU memory isn't freed even after Python quits, it is very likely that
-some Python subprocesses are still alive. You may find them via
-``ps -elf | grep python`` and manually kill them with ``kill -9 [pid]``.
-
-My out of memory exception handler can't allocate memory
---------------------------------------------------------
-You may have some code that tries to recover from out of memory errors.
-
-.. code-block:: python
-
-    try:
-        run_model(batch_size)
-    except RuntimeError: # Out of memory
-        for _ in range(batch_size):
-            run_model(1)
-
-But find that when you do run out of memory, your recovery code can't allocate
-either. That's because the python exception object holds a reference to the
-stack frame where the error was raised. Which prevents the original tensor
-objects from being freed. The solution is to move you OOM recovery code outside
-of the ``except`` clause.
-
-.. code-block:: python
-
-    oom = False
-    try:
-        run_model(batch_size)
-    except RuntimeError: # Out of memory
-        oom = True
-
-    if oom:
-        for _ in range(batch_size):
-            run_model(1)
-
-
-.. _dataloader-workers-random-seed:
-
-My data loader workers return identical random numbers
+My recurrent network doesn't work with TorchScript
 -------------------------------------------------------
-You are likely using other libraries to generate random numbers in the dataset
-and worker subprocesses are started via ``fork``. See
-:class:`torch.utils.data.DataLoader`'s documentation for how to
-properly set up random seeds in workers with its :attr:`worker_init_fn` option.
+When using the ``pack sequence -> recurrent network -> unpack sequence`` pattern in a :class:`~torch.nn.Module` with TorchScript, you may encounter runtime errors that do not occur during eager execution. This can happen due to differences in how TorchScript handles certain operations, such as indexing and CUDA operations. If you experience issues, consider the following workarounds:
 
-.. _pack-rnn-unpack-with-data-parallelism:
+1. **Avoid CUDA Operations**: If possible, perform operations on the CPU instead of CUDA, as some users have reported that this resolves certain runtime errors.
 
-My recurrent network doesn't work with data parallelism
--------------------------------------------------------
-There is a subtlety in using the
-``pack sequence -> recurrent network -> unpack sequence`` pattern in a
-:class:`~torch.nn.Module` with :class:`~torch.nn.DataParallel` or
-:func:`~torch.nn.parallel.data_parallel`. Input to each the :meth:`forward` on
-each device will only be part of the entire input. Because the unpack operation
-:func:`torch.nn.utils.rnn.pad_packed_sequence` by default only pads up to the
-longest input it sees, i.e., the longest on that particular device, size
-mismatches will happen when results are gathered together. Therefore, you can
-instead take advantage of the :attr:`total_length` argument of
-:func:`~torch.nn.utils.rnn.pad_packed_sequence` to make sure that the
-:meth:`forward` calls return sequences of same length. For example, you can
-write::
+2. **Ensure Proper Indexing**: Check that all indexing operations are valid and that indices are within the expected range. TorchScript may enforce stricter checks compared to eager execution.
 
-    from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+3. **Use `total_length` Argument**: As with data parallelism, ensure that the :attr:`total_length` argument of :func:`~torch.nn.utils.rnn.pad_packed_sequence` is used to maintain consistent sequence lengths across different parts of the model.
 
-    class MyModule(nn.Module):
-        # ... __init__, other methods, etc.
+4. **Test with Eager Execution**: Before converting to TorchScript, thoroughly test your model in eager execution to ensure that all operations are functioning as expected.
 
-        # padded_input is of shape [B x T x *] (batch_first mode) and contains
-        # the sequences sorted by lengths
-        #   B is the batch size
-        #   T is max sequence length
-        def forward(self, padded_input, input_lengths):
-            total_length = padded_input.size(1)  # get the max sequence length
-            packed_input = pack_padded_sequence(padded_input, input_lengths,
-                                                batch_first=True)
-            packed_output, _ = self.my_lstm(packed_input)
-            output, _ = pad_packed_sequence(packed_output, batch_first=True,
-                                            total_length=total_length)
-            return output
-
-
-    m = MyModule().cuda()
-    dp_m = nn.DataParallel(m)
-
-
-Additionally, extra care needs to be taken when batch dimension is dim ``1``
-(i.e., ``batch_first=False``) with data parallelism. In this case, the first
-argument of pack_padded_sequence ``padding_input`` will be of shape
-``[T x B x *]`` and should be scattered along dim ``1``, but the second argument
-``input_lengths`` will be of shape ``[B]`` and should be scattered along dim
-``0``. Extra code to manipulate the tensor shapes will be needed.
+If these steps do not resolve the issue, consider reaching out to the PyTorch community for further assistance or checking for updates that may address the problem.
