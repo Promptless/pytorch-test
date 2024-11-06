@@ -115,6 +115,11 @@ and recorded the result of the operation ``n + 1`` in the graph. This is
 another feature of Dynamo: Dynamo will treat as constant any non-tensor
 value… other than ints. Let’s see now how are ints special.
 
+.. note::
+
+   The `torch._utils.is_compiling()` and `torch._dynamo.is_compiling()` functions have been deprecated. 
+   Please use `torch.compiler.is_compiling()` instead for checking if the code is being compiled.
+
 The last defining property of Dynamo is that it knows how to handle
 dynamic shapes. Symbolic shapes refer to Dynamo’s ability of tracing
 shapes, and more generally, integers, rather than leaving them as
