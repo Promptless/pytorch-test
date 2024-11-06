@@ -16,7 +16,7 @@ worlds — usability and performance.
 
 Dynamo makes it easy to experiment with different compiler
 backends to make PyTorch code faster with a single line decorator
-``torch._dynamo.optimize()`` which is wrapped for convenience by ``torch.compile()``
+``torch.compiler.optimize()`` which is wrapped for convenience by ``torch.compile()``
 
 The following diagram demonstrates how PyTorch works with ``torch.compile``
 and without it:
@@ -50,20 +50,20 @@ What is a guard?
 
 Dynamo operates just-in-time and specializes graphs based on
 dynamic properties. Below is a basic example of how to use Dynamo.
-One can decorate a function or a method using ``torchdynamo.optimize`` to enable
+One can decorate a function or a method using ``torch.compiler.optimize`` to enable
 Dynamo optimization:
 
 .. code-block:: python
 
    from typing import List
    import torch
-   from torch import _dynamo as torchdynamo
+   from torch import compiler as torchcompiler
    def my_compiler(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
        print("my_compiler() called with FX graph:")
        gm.graph.print_tabular()
        return gm.forward  # return a python callable
 
-   @torchdynamo.optimize(my_compiler)
+   @torchcompiler.optimize(my_compiler)
    def toy_example(a, b):
        x = a / (torch.abs(a) + 1)
        if b.sum() < 0:

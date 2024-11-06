@@ -1,4 +1,5 @@
-Frequently Asked Questions
+    ==== UPDATED DOCUMENT CONTENT ====
+    Frequently Asked Questions
 ==========================
 **Author**: `Mark Saroufim <https://github.com/msaroufim>`_
 
@@ -88,6 +89,11 @@ succeeded.
    forward graph capture and then runs the captured graph with PyTorch.
    If this fails then there’s an issue with TorchDynamo.
 
+Deprecation Notice
+~~~~~~~~~~~~~~~~~~
+
+The function `torch._utils.is_compiling()` and `torch._dynamo.is_compiling()` have been deprecated. Please use `torch.compiler.is_compiling()` instead. This change improves code maintainability and consistency.
+
 2. ``torch.compile(..., backend="aot_eager")``
    which runs TorchDynamo to capture a forward graph, and then AOTAutograd
    to trace the backward graph without any additional backend compiler
@@ -169,242 +175,34 @@ There are 3 major ways to accelerate PyTorch code:
 
 3. Automatic work placement: Similar of the out of order execution point,
    but by matching nodes of a graph to resources like physical hardware or
-   memory we can design an appropriate schedule
-
-The above are general principles for accelerating PyTorch code but
-different backends will each make different tradeoffs on what to
-optimize. For example Inductor first takes care of fusing whatever it
-can and only then generates `Triton <https://openai.com/blog/triton/>`__
-kernels.
-
-Triton in addition offers speedups because of automatic memory
-coalescing, memory management and scheduling within each Streaming
-Multiprocessor and has been designed to handle tiled computations.
-
-However, regardless of the backend you use it’s best to use a benchmark
-and see approach so try out the PyTorch profiler, visually inspect the
-generated kernels and try to see what’s going on for yourself.
-
-Why am I not seeing speedups?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. _torch.compiler_graph_breaks:
-
-Graph Breaks
-------------
-
-The main reason you won’t see the speedups you’d like to by using dynamo
-is excessive graph breaks. So what’s a graph break?
-
-Given a program like:
-
-.. code-block:: python
-
-   def some_fun(x):
-       ...
-
-   torch.compile(some_fun)(x)
-   ...
-
-Torchdynamo will attempt to compile all of the torch/tensor operations
-within ``some_fun()`` into a single FX graph, but it may fail to capture
-everything into one graph.
-
-Some graph break reasons are insurmountable to TorchDynamo like calling
-into a C extension other than PyTorch is invisible to TorchDynamo, and
-could do arbitrary things without TorchDynamo being able to introduce
-necessary guards to ensure that the compiled program would be safe to reuse.
-
-   To maximize performance, it’s important to have as few graph breaks
-   as possible.
-
-Identifying the cause of a graph break
---------------------------------------
-
-To identify all graph breaks in a program and the associated reasons for
-the breaks, ``torch._dynamo.explain`` can be used. This tool runs
-TorchDynamo on the supplied function and aggregates the graph breaks
-that are encountered. Here is an example usage:
-
-.. code-block:: python
-
-   import torch
-   import torch._dynamo as dynamo
-   def toy_example(a, b):
-       x = a / (torch.abs(a) + 1)
-       print("woo")
-       if b.sum() < 0:
-           b = b * -1
-       return x * b
-   explanation = dynamo.explain(toy_example)(torch.randn(10), torch.randn(10))
-   print(explanation)
-   """
-   Graph Count: 3
-   Graph Break Count: 2
-   Op Count: 5
-   Break Reasons:
-     Break Reason 1:
-       Reason: builtin: print [<class 'torch._dynamo.variables.constant.ConstantVariable'>] False
-       User Stack:
-         <FrameSummary file foo.py, line 5 in toy_example>
-     Break Reason 2:
-       Reason: generic_jump TensorVariable()
-       User Stack:
-         <FrameSummary file foo.py, line 6 in torch_dynamo_resume_in_toy_example_at_5>
-   Ops per Graph:
-     ...
-   Out Guards:
-     ...
-   """
-
-To throw an error on the first graph break encountered you can
-disable python fallbacks by using ``fullgraph=True``, this should be
-familiar if you’ve worked with export based compilers.
-
-.. code-block:: python
-
-   def toy_example(a, b):
-      ...
-
-   torch.compile(toy_example, fullgraph=True, backend=<compiler>)(a, b)
-
-Why didn’t my code recompile when I changed it?
------------------------------------------------
-
-If you enabled dynamic shapes by setting
-``env TORCHDYNAMO_DYNAMIC_SHAPES=1 python model.py`` then your code
-won’t recompile on shape changes. We’ve added support for dynamic shapes
-which avoids recompilations in the case when shapes vary by less than a
-factor of 2. This is especially useful in scenarios like varying image
-sizes in CV or variable sequence length in NLP. In inference scenarios
-it’s often not possible to know what a batch size will be beforehand
-because you take what you can get from different client apps.
-
-In general, TorchDynamo tries very hard not to recompile things
-unnecessarily so if for example TorchDynamo finds 3 graphs and your
-change only modified one graph then only that graph will recompile. So
-another tip to avoid potentially slow compilation times is to warmup a
-model by compiling it once after which subsequent compilations will be
-much faster. Cold start compile times is still a metric we track
-visibly.
-
+   memory we can design an appropriate schedule```
 Why am I getting incorrect results?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Accuracy issues can also be minified if you set the environment variable
-``TORCHDYNAMO_REPRO_LEVEL=4``, it operates with a similar git bisect
-model and a full repro might be something like
-``TORCHDYNAMO_REPRO_AFTER="aot" TORCHDYNAMO_REPRO_LEVEL=4`` the reason
-we need this is downstream compilers will codegen code whether it’s
-Triton code or the C++ backend, the numerics from those downstream
-compilers can be different in subtle ways yet have dramatic impact on
-your training stability. So the accuracy debugger is very useful for us
-to detect bugs in our codegen or with a backend compiler.
+If you are experiencing incorrect results when using `torch.compile`, it might be due to deprecated functions or APIs that have been updated. For instance, if you are using `torch._utils.is_compiling()` or `torch._dynamo.is_compiling()`, note that these have been deprecated. You should now use `torch.compiler.is_compiling()` instead. This change ensures better maintainability and consistency across the codebase.
 
-If you'd like to ensure that random number generation is the same across both torch
-and triton then you can enable ``torch._inductor.config.fallback_random = True``
-
-Why am I getting OOMs?
-~~~~~~~~~~~~~~~~~~~~~~
-
-Dynamo is still an alpha product so there’s a few sources of OOMs and if
-you’re seeing an OOM try disabling the following configurations in this
-order and then open an issue on GitHub so we can solve the root problem
-1. If you’re using dynamic shapes try disabling them, we’ve disabled
-them by default: ``env TORCHDYNAMO_DYNAMIC_SHAPES=0 python model.py`` 2.
-CUDA graphs with Triton are enabled by default in inductor but removing
-them may alleviate some OOM issues: ``torch._inductor.config.triton.cudagraphs = False``.
-
-Does ``torch.func`` work with ``torch.compile`` (for `grad` and `vmap` transforms)?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Applying a ``torch.func`` transform to a function that uses ``torch.compile``
-does work:
-
-.. code-block:: python
-
-    import torch
-
-    @torch.compile
-    def f(x):
-        return torch.sin(x)
-
-    def g(x):
-        return torch.grad(f)(x)
-
-    x = torch.randn(2, 3)
-    g(x)
-
-Calling ``torch.func`` transform inside of a function handled with ``torch.compile``
-------------------------------------------------------------------------------------
-
-
-Compiling ``torch.func.grad`` with ``torch.compile``
-----------------------------------------------------
-
-.. code-block:: python
-
-    import torch
-
-    def wrapper_fn(x):
-        return torch.func.grad(lambda x: x.sin().sum())(x)
-
-    x = torch.randn(3, 3, 3)
-    grad_x = torch.compile(wrapper_fn)(x)
-
-Compiling ``torch.vmap`` with ``torch.compile``
------------------------------------------------
-
-.. code-block:: python
-
-    import torch
-
-    def my_fn(x):
-        return torch.vmap(lambda x: x.sum(1))(x)
-
-    x = torch.randn(3, 3, 3)
-    output = torch.compile(my_fn)(x)
-
-
-Compiling functions besides the ones which are supported (escape hatch)
------------------------------------------------------------------------
-
-For other transforms, as a workaround, use ``torch._dynamo.allow_in_graph``
-
-``allow_in_graph`` is an escape hatch. If your code does not work with
-``torch.compile``, which introspects Python bytecode, but you believe it
-will work via a symbolic tracing approach (like ``jax.jit``), then use
-``allow_in_graph``.
-
-By using ``allow_in_graph`` to annotate a function, you must make sure
-your code meets the following requirements:
-
-- All outputs in your function only depend on the inputs and
-  do not depend on any captured Tensors.
-- Your function is functional. That is, it does not mutate any state. This may
-  be relaxed; we actually support functions that appear to be functional from
-  the outside: they may have in-place PyTorch operations, but may not mutate
-  global state or inputs to the function.
-- Your function does not raise data-dependent errors.
-
-.. code-block:: python
-
-    import torch
-
-    @torch.compile
-    def f(x):
-        return torch._dynamo.allow_in_graph(torch.vmap(torch.sum))(x)
-
-    x = torch.randn(2, 3)
-    f(x)
-
-A common pitfall is using ``allow_in_graph`` to annotate a function that
-invokes an ``nn.Module``. This is because the outputs now depend on the
-parameters of the ``nn.Module``. To get this to work, use
-``torch.func.functional_call`` to extract the module state.
-
+To address this, make sure to update your code to use the new method and check for any other deprecated functions that might affect your results. Additionally, ensure that you are using the latest version of PyTorch and its dependencies to benefit from the latest fixes and improvements.
+``````
 Does NumPy work with ``torch.compile``?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Yes, NumPy can be used with ``torch.compile``. However, it's important to note that while PyTorch operations are optimized and compiled, NumPy operations are not. This means that any NumPy operations will run in their standard interpreted mode, which may not benefit from the performance improvements provided by ``torch.compile``. If you need to use NumPy within a compiled function, consider converting NumPy arrays to PyTorch tensors, performing the operations using PyTorch, and then converting back to NumPy if necessary.
+
+Deprecation Notice
+~~~~~~~~~~~~~~~~~~
+
+The functions `torch._utils.is_compiling()` and `torch._dynamo.is_compiling()` have been deprecated. Please use `torch.compiler.is_compiling()` instead. This change improves code maintainability and consistency. If you have existing code that uses the deprecated functions, update it to use the new method to ensure compatibility with future versions of PyTorch.
+
+Example:
+
+.. code-block:: python
+
+    import torch
+
+    if torch.compiler.is_compiling():
+        # Your code here
+```
+
 
 Starting in 2.1, ``torch.compile`` understands native NumPy programs that
 work on NumPy arrays, and mixed PyTorch-NumPy programs that convert from PyTorch
@@ -592,49 +390,7 @@ How do I debug NumPy code under ``torch.compile``?
 Debugging JIT compiled code is challenging, given the complexity of modern
 compilers and the daunting errors that they raise.
 `The tutorial on how to diagnose runtime errors within torch.compile <https://pytorch.org/docs/main/torch.compiler_troubleshooting.html#diagnosing-runtime-errors>`__
-contains a few tips and tricks on how to tackle this task.
-
-If the above is not enough to pinpoint the origin of the issue, there are still
-a few other NumPy-specific tools we can use. We can discern whether the bug
-is entirely in the PyTorch code by disabling tracing through NumPy functions:
-
-
-.. code-block:: python
-
-   from torch._dynamo import config
-   config.trace_numpy = False
-
-If the bug lies in the traced NumPy code, we can execute the NumPy code eagerly (without ``torch.compile``)
-using PyTorch as a backend by importing ``import torch._numpy as np``.
-This should just be used for **debugging purposes** and is in no way a
-replacement for the PyTorch API, as it is **much less performant** and, as a
-private API, **may change without notice**. At any rate, ``torch._numpy`` is a
-Python implementation of NumPy in terms of PyTorch and it is used internally by ``torch.compile`` to
-transform NumPy code into Pytorch code. It is rather easy to read and modify,
-so if you find any bug in it feel free to submit a PR fixing it or simply open
-an issue.
-
-If the program does work when importing ``torch._numpy as np``, chances are
-that the bug is in TorchDynamo. If this is the case, please feel open an issue
-with a `minimal reproducer <https://pytorch.org/docs/2.1/torch.compiler_troubleshooting.html>`__.
-
-I ``torch.compile`` some NumPy code and I did not see any speed-up.
--------------------------------------------------------------------
-
-The best place to start is the
-`tutorial with general advice for how to debug these sort of torch.compile issues <https://pytorch.org/docs/main/torch.compiler_faq.html#why-am-i-not-seeing-speedups>`__.
-
-Some graph breaks may happen because of the use of unsupported features. See
-:ref:`nonsupported-numpy-feats`. More generally, it is useful to keep in mind
-that some widely used NumPy features do not play well with compilers. For
-example, in-place modifications make reasoning difficult within the compiler and
-often yield worse performance than their out-of-place counterparts.As such, it is best to avoid
-them. Same goes for the use of the ``out=`` parameter. Instead, prefer
-out-of-place ops and let ``torch.compile`` optimize the memory use. Same goes
-for data-dependent ops like masked indexing through boolean masks, or
-data-dependent control flow like ``if`` or ``while`` constructions.
-
-
+contains a few tips and tricks on how to tackle this task.```
 Which API to use for fine grain tracing?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -645,26 +401,26 @@ you can find more information in :ref:`torchdynamo_fine_grain_tracing`.
 How do I graph break on a function?
 -----------------------------------
 
-Graph break on a function is not enough to sufficiently express what you  want
+Graph break on a function is not enough to sufficiently express what you want
 PyTorch to do. You need to be more specific about your use case. Some of the
 most common use cases you might want to consider:
 
 * If you want to disable compilation on this function frame and the recursively
-  invoked frames, use ``torch._dynamo.disable``.
+  invoked frames, use ``torch.compiler.disable``.
 
-* If you want a particular operator, such as ``fbgemm`` to use the  eager mode,
-  use ``torch._dynamo.disallow_in_graph``.
+* If you want a particular operator, such as ``fbgemm`` to use the eager mode,
+  use ``torch.compiler.disallow_in_graph``.
 
 Some of the uncommon use cases include:
 
 * If you want to disable TorchDynamo on the function frame but enable it back
-  on the recursively invoked frames – use ``torch._dynamo.disable(recursive=False)``.
+  on the recursively invoked frames – use ``torch.compiler.disable(recursive=False)``.
 
-* If you want to prevent inlining of a function frame – use ``torch._dynamo.graph_break``
+* If you want to prevent inlining of a function frame – use ``torch.compiler.graph_break``
   at the beginning of the function you want to prevent inlining.
 
-What's the difference between ``torch._dynamo.disable`` and ``torch._dynamo.disallow_in_graph``
------------------------------------------------------------------------------------------------
+What's the difference between ``torch.compiler.disable`` and ``torch.compiler.disallow_in_graph``
+-------------------------------------------------------------------------------------------------
 
 Disallow-in-graph works at the level of operators, or more specifically,
 the operators that you see in the TorchDynamo extracted graphs.
@@ -672,16 +428,17 @@ the operators that you see in the TorchDynamo extracted graphs.
 Disable works at the function frame level and decides if TorchDynamo
 should look into the function frame or not.
 
-What's the difference between ``torch._dynamo.disable`` and ``torch._dynamo_skip``
-----------------------------------------------------------------------------------
+What's the difference between ``torch.compiler.disable`` and ``torch.compiler_skip``
+------------------------------------------------------------------------------------
 
 .. note::
-   ``torch._dynamo_skip`` is deprecated.
+   ``torch.compiler_skip`` is deprecated.
 
-You most likely need ``torch._dynamo.disable``. But in an unlikely scenario, you
+You most likely need ``torch.compiler.disable``. But in an unlikely scenario, you
 might need even finer control. Suppose you want to disable the tracing on just
 the ``a_fn`` function, but want to continue the tracing back in ``aa_fn`` and
 ``ab_fn``. The image below demonstrates this use case:
+```
 
 
 .. figure:: _static/img/fine_grained_apis/call_stack_diagram.png

@@ -11,11 +11,11 @@ TorchDynamo APIs for fine-grained tracing
 However, it is possible that a small part of the model code cannot be
 handled by ``torch.compiler``. In this case, you might want to disable
 the compiler on that particular portion, while running compilation on
-the rest of the model. This section describe the existing APIs that
-use to define parts of your code in which you want to skip compilation
+the rest of the model. This section describes the existing APIs that
+you can use to define parts of your code in which you want to skip compilation
 and the relevant use cases.
 
-The API that you can use to define portions of the code on which you can
+The APIs that you can use to define portions of the code on which you can
 disable compilation are listed in the following table:
 
 .. csv-table:: TorchDynamo APIs to control fine-grained tracing
@@ -48,8 +48,7 @@ To skip compilation, you can decorate the offending function with
 ``@torch.compiler.disable``.
 
 You can also use the non-decorator syntax if you don’t want to change the source
-code
-However, we recommend that you avoid this style if possible. Here, you have to
+code. However, we recommend that you avoid this style if possible. Here, you have to
 take care that all users of the original function are now using the patched
 version.
 

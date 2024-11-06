@@ -80,6 +80,8 @@ module using new parameters and buffers and inputs.
 Here's an example of how to compute gradients of parameters of a model using functorch
 vs :mod:`torch.func`::
 
+# Note: The following section should be updated to reflect the deprecation of `torch._utils.is_compiling()` and `torch._dynamo.is_compiling()`, and the introduction of `torch.compiler.is_compiling()`. Ensure that any references to deprecated functions are replaced with the new API in examples or explanations.
+
     # ---------------
     # using functorch
     # ---------------
