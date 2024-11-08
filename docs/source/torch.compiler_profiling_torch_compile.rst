@@ -88,34 +88,33 @@ See an example below:
 .. code-block:: python
 
     import torch
-    from torchvision.models import resnet18
+    from torchvision.models import resnet18```python
+model = resnet18().cuda()
+inputs = [torch.randn((5, 3, 224, 224), device='cuda') for _ in range(10)]
 
-    model = resnet18().cuda()
-    inputs = [torch.randn((5, 3, 224, 224), device='cuda') for _ in range(10)]
+model_c = torch.compile(model)
 
-    model_c = torch.compile(model)
+def fwd_bwd(inp):
+    out = model_c(inp)
+    out.sum().backward()
 
-    def fwd_bwd(inp):
-        out = model_c(inp)
-        out.sum().backward()
+def warmup_compile():
+    def fn(x):
+        return x.sin().relu()
 
-    def warmup_compile():
-        def fn(x):
-            return x.sin().relu()
+    x = torch.rand((2, 2), device='cuda', requires_grad=True)
+    fn_c = torch.compile(fn)
+    out = fn_c(x)
+    out.sum().backward()
 
-        x = torch.rand((2, 2), device='cuda', requires_grad=True)
-        fn_c = torch.compile(fn)
-        out = fn_c(x)
-        out.sum().backward()
+with torch.profiler.profile() as prof:
+    with torch.profiler.record_function("warmup compile"):
+        warmup_compile()
 
-    with torch.profiler.profile() as prof:
-        with torch.profiler.record_function("warmup compile"):
-            warmup_compile()
+    with torch.profiler.record_function("resnet18 compile"):
+        fwd_bwd(inputs[0])
 
-        with torch.profiler.record_function("resnet18 compile"):
-            fwd_bwd(inputs[0])
-
-    prof.export_chrome_trace("trace_compile.json")
+prof.export_chrome_trace("trace_compile.json")
 
 .. figure:: _static/img/profiling_torch_compile/compilation_profiling.png
     :alt: A visualization in the chrome://trace viewer, showing dynamo and inductor compilation steps
@@ -191,6 +190,7 @@ See the synthetic example below for a demonstration:
             prof.step()
 
     prof.export_chrome_trace("trace_break.json")
+```
 
 .. figure:: _static/img/profiling_torch_compile/graph_breaks_with_torch_compiled_region.png
     :alt: Visualization in the chrome://trace viewer, showing nested Torch-Compiled Region events and multiple CompiledFunction events - indicating graph breaks.

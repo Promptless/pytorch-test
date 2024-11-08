@@ -88,7 +88,15 @@ succeeded.
    forward graph capture and then runs the captured graph with PyTorch.
    If this fails then there’s an issue with TorchDynamo.
 
-2. ``torch.compile(..., backend="aot_eager")``
+Why should I use `mark_compile_region` instead of `invoke_subgraph`?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The `invoke_subgraph` function is deprecated in favor of `mark_compile_region`. 
+`mark_compile_region` enhances modularity and reusability of compiled subgraphs 
+in PyTorch operations. It acts as a wrapper to instruct `torch.compile` to compile 
+the wrapped region once and reuse the compiled artifact, providing better error 
+handling and code clarity. Direct usage of `invoke_subgraph` is discouraged and 
+will raise exceptions to guide users towards using `mark_compile_region`.2. ``torch.compile(..., backend="aot_eager")``
    which runs TorchDynamo to capture a forward graph, and then AOTAutograd
    to trace the backward graph without any additional backend compiler
    steps. PyTorch eager will then be used to run the forward and backward

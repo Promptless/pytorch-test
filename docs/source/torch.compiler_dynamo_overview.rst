@@ -1,3 +1,4 @@
+```plaintext
 Dynamo Overview
 ===============
 
@@ -84,6 +85,7 @@ guards:
    ___skip_backend_check() or ___current_backend() == ___lookup_backend(140355900538256)
    check_tensor(L['a'], Tensor, DispatchKeySet(CPU, BackendSelect, ADInplaceOrView, AutogradCPU), torch.float32, device=None, requires_grad=False, size=[10], stride=[1])
    check_tensor(L['b'], Tensor, DispatchKeySet(CPU, BackendSelect, ADInplaceOrView, AutogradCPU), torch.float32, device=None, requires_grad=False, size=[10], stride=[1])
+```
 
 If any of those guards fail, the graph will be recaptured and
 recompiled. The interesting guard there is ``check_tensor``, which
