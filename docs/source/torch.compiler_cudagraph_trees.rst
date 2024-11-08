@@ -136,90 +136,38 @@ shows CUDAGraph Trees' support for tensors which are prior outputs from CUDAGrap
 
 .. code-block:: python
 
-    import torch
+    import torch```python
+@torch.compile(mode="reduce-overhead")
+def foo(x):
+    return x + 1
 
-    @torch.compile(mode="reduce-overhead")
-    def foo(x):
-        return x + 1
+@torch.compile(mode="reduce-overhead")
+def mut(x):
+    return x.add_(2)
 
-    @torch.compile(mode="reduce-overhead")
-    def mut(x):
-        return x.add_(2)
+# Enable input mutation support
+torch._inductor.config.triton.cudagraph_support_input_mutation = True
 
-    # Enable input mutation support
-    torch._inductor.config.triton.cudagraph_support_input_mutation = True
-
-    for i in range(3):
-        torch.compiler.cudagraph_mark_step_begin()
-        inp = torch.rand([4], device="cuda")
-
-        # CUDAGraph is applied since `foo` does not mutate `inp`
-        tmp = foo(inp)
-        # Although `mut` mutates `tmp`, which is an output of a CUDAGraph
-        # managed function. So CUDAGraph is still applied.
-        mut(tmp)
-
-
+for i in range(3):
     torch.compiler.cudagraph_mark_step_begin()
     inp = torch.rand([4], device="cuda")
 
+    # CUDAGraph is applied since `foo` does not mutate `inp`
     tmp = foo(inp)
-    # While `tmp` is a CUDAGraph Tree managed function's output, `tmp.clone()`
-    # is not. So CUDAGraph is not applied to `mut` and there is a log
-    # `skipping cudagraphs due to mutated inputs`
-    mut(tmp.clone())
+    # Although `mut` mutates `tmp`, which is an output of a CUDAGraph
+    # managed function. So CUDAGraph is still applied.
+    mut(tmp)
 
 
-To enable CUDAGraph Trees for a function mutating inputs from eager, please re-write
-the function to avoid input mutation.
+torch.compiler.cudagraph_mark_step_begin()
+inp = torch.rand([4], device="cuda")
 
-.. note:: Enable input mutation support by setting
-  `torch._inductor.config.cudagraph_support_input_mutation = True <https://github.com/pytorch/pytorch/blob/main/torch/_inductor/config.py#L662>`_
-  for "reduce-overhead" mode.
-
-
-Dynamic Shape Support
----------------------
-
-`Dynamic shape <https://pytorch.org/docs/stable/torch.compiler_dynamic_shapes.html>`_
-means that an input tensor has different shapes across function calls. Since CUDAGraph
-requires fixed tensor addresses, CUDAGraph Trees re-record CUDAGraph for every unique
-shape of an input tensor. This leads to multiple CUDAGraphs for a single inductor graph.
-When there are limited shapes (e.g., batch sizes in inference), it is profitable to
-re-record CUDAGraphs. However, if input tensor shapes change frequently or even on
-every invocation, re-recording CUDAGraph may not be profitable. Nvidia uses 64 KB of
-device memory per kernel launch in CUDAGraph, up until CUDA 12.4 and Driver Version 550+.
-This memory cost can be significant with many CUDAGraph re-recordings.
-
-For functions with frequently changing input tensor shapes, we suggest padding input
-tensors to a few fixed tensor shapes to still enjoy benefits from CUDAGraph. In addition,
-setting  `torch._inductor.config.triton.cudagraph_skip_dynamic_graphs=True <https://github.com/pytorch/pytorch/blob/main/torch/_inductor/config.py#L653>`_
-allows to skip cudagraphing functions with dynamic shape inputs and only cudagraphing
-functions with static input tensor shapes.
-
-
-NCCL Support
-------------
-
-CUDAGraph Trees support functions with nccl operators. While CUDAGraph Trees perform per-device
-record for CUDAGraph, NCCL support allows cross-device communication.
-
-.. code-block:: python
-
-    @torch.compile(mode="reduce-overhead")
-    def func(x):
-        y = x * x
-        y = torch.distributed.all_reduce(y, op=torch.distributed.ReduceOp.SUM)
-        x = torch.nn.functional.silu(x)
-        return x * y
-
-
-Reasons for Skipping CUDAGraph
-------------------------------
-
-Since CUDAGraph has requirements such as static input tensor addresses and not supporting
-CPU operators, CUDAGraph Trees check whether a function satisfies these requirements and
-may skip CUDAGraph when necessary. Here, we list common reasons for skipping CUDAGraph.
+tmp = foo(inp)
+# While `tmp` is a CUDAGraph Tree managed function's output, `tmp.clone()`
+# is not. So CUDAGraph is not applied to `mut` and there is a log
+# `skipping cudagraphs due to mutated inputs`
+mut(tmp.clone())
+```
 
 * **Input mutation**: CUDAGraph Trees skip functions that in-place mutates eager input.
   In-place mutating parameters and buffers, or output tensors from CUDAGraph Tree managed

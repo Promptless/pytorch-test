@@ -88,109 +88,55 @@ See an example below:
 .. code-block:: python
 
     import torch
-    from torchvision.models import resnet18
+    from torchvision.models import resnet18```python
+import torch
+import torch._dynamo
 
-    model = resnet18().cuda()
-    inputs = [torch.randn((5, 3, 224, 224), device='cuda') for _ in range(10)]
+class ModelWithBreaks(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        def create_sequential():
+            return torch.nn.Sequential(
+                torch.nn.Linear(128, 128),
+                torch.nn.ReLU(),
+                torch.nn.Linear(128, 128),
+                torch.nn.ReLU(),
+            )
+        self.mod1 = create_sequential()
+        self.mod2 = create_sequential()
+        self.mod3 = create_sequential()
+        self.mod4 = create_sequential()
 
-    model_c = torch.compile(model)
-
-    def fwd_bwd(inp):
-        out = model_c(inp)
-        out.sum().backward()
-
-    def warmup_compile():
-        def fn(x):
-            return x.sin().relu()
-
-        x = torch.rand((2, 2), device='cuda', requires_grad=True)
-        fn_c = torch.compile(fn)
-        out = fn_c(x)
-        out.sum().backward()
-
-    with torch.profiler.profile() as prof:
-        with torch.profiler.record_function("warmup compile"):
-            warmup_compile()
-
-        with torch.profiler.record_function("resnet18 compile"):
-            fwd_bwd(inputs[0])
-
-    prof.export_chrome_trace("trace_compile.json")
-
-.. figure:: _static/img/profiling_torch_compile/compilation_profiling.png
-    :alt: A visualization in the chrome://trace viewer, showing dynamo and inductor compilation steps
-
-Note a few things:
-
-* The first invocation should occur *during* profiling in order to capture compilation
-* Add a warm-up compilation in order to initialize any systems that need to be lazily initialized.
-
-Finding graph breaks: "Torch-Compiled Region" and "CompiledFunction"
---------------------------------------------------------------------
-
-Although there are logging tools for identifying graph breaks, the profiler provides a quick visual method of identifying :ref:`graph breaks <torch.compiler_graph_breaks>`. There are two profiler events to look for: **Torch-Compiled Region** and **CompiledFunction**.
-
-**Torch-Compiled Region** - which was introduced in PyTorch 2.2 - is a profiler event that covers the entire compiled region. Graph breaks almost always look the same: nested “Torch-Compiled Region” events.
-
-If you run two separate functions with torch.compile() applied independently on each of them, you should generally expect to see two adjacent (i.e NOT stacked/nested) Torch-Compiled regions. Meanwhile, if you encounter graph breaks (or disable()'ed/skipped regions), expect nested “Torch-Compiled Region” events.
-
-**CompiledFunction** - introduced in PyTorch 2.0 - is a profiler event that appears when gradients are required for any inputs.  Each graph break will interrupt a CompiledFunction block, splitting it in two. CompiledFunction events only appear when Autograd is involved, i.e. some of the input tensors to the graph have requires_grad=True.
-
-When a CompiledFunction appears in a trace, it is typically paired with a CompiledFunctionBackward event in the backward pass. A “fwd-bwd link” should appear in the trace connecting the two, if the backward function is called.
-
-If your use case includes a graph that doesn't require grad and doesn't include "Torch-Compiled Region" events, it can be more difficult to identify whether torch.compile is being applied correctly. One clue can be the existence of Inductor-generated Triton kernels.
-
-See the synthetic example below for a demonstration:
-
-.. code-block:: python
-
-    import torch
-    import torch._dynamo
-
-    class ModelWithBreaks(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            def create_sequential():
-                return torch.nn.Sequential(
-                    torch.nn.Linear(128, 128),
-                    torch.nn.ReLU(),
-                    torch.nn.Linear(128, 128),
-                    torch.nn.ReLU(),
-                )
-            self.mod1 = create_sequential()
-            self.mod2 = create_sequential()
-            self.mod3 = create_sequential()
-            self.mod4 = create_sequential()
-
-        def forward(self, inp):
-            mod1 = self.mod1(inp)
-            torch._dynamo.graph_break()
-            mod2 = self.mod2(mod1)
-            torch._dynamo.graph_break()
-            mod3 = self.mod3(mod2)
-            torch._dynamo.graph_break()
-            mod4 = self.mod4(mod3)
-            return mod4
+    def forward(self, inp):
+        mod1 = self.mod1(inp)
+        torch._dynamo.graph_break()
+        mod2 = self.mod2(mod1)
+        torch._dynamo.graph_break()
+        mod3 = self.mod3(mod2)
+        torch._dynamo.graph_break()
+        mod4 = self.mod4(mod3)
+        return mod4
 
 
-    model = ModelWithBreaks().cuda()
-    inputs = [torch.randn((128, 128), device='cuda') for _ in range(10)]
+model = ModelWithBreaks().cuda()
+inputs = [torch.randn((128, 128), device='cuda') for _ in range(10)]
 
-    model_c = torch.compile(model)
+model_c = torch.compile(model)
 
-    def fwd_bwd(inp):
-        out = model_c(inp)
-        out.sum().backward()
+def fwd_bwd(inp):
+    out = model_c(inp)
+    out.sum().backward()
 
-    # warm up
-    fwd_bwd(inputs[0])
+# warm up
+fwd_bwd(inputs[0])
 
-    with torch.profiler.profile() as prof:
-        for i in range(1, 4):
-            fwd_bwd(inputs[i])
-            prof.step()
+with torch.profiler.profile() as prof:
+    for i in range(1, 4):
+        fwd_bwd(inputs[i])
+        prof.step()
 
-    prof.export_chrome_trace("trace_break.json")
+prof.export_chrome_trace("trace_break.json")
+```
 
 .. figure:: _static/img/profiling_torch_compile/graph_breaks_with_torch_compiled_region.png
     :alt: Visualization in the chrome://trace viewer, showing nested Torch-Compiled Region events and multiple CompiledFunction events - indicating graph breaks.
