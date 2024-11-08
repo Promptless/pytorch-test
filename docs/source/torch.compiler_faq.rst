@@ -88,6 +88,26 @@ succeeded.
    forward graph capture and then runs the captured graph with PyTorch.
    If this fails then there’s an issue with TorchDynamo.
 
+What is `mark_compile_region`?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+`mark_compile_region` is a function used to mark regions of code for compilation in `torch.compile`. It replaces the deprecated `invoke_subgraph` function. This function ensures that the marked region is compiled once and the compiled artifact is reused, optimizing the compilation process and improving runtime efficiency.
+
+How do I transition from `invoke_subgraph` to `mark_compile_region`?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To transition from `invoke_subgraph` to `mark_compile_region`, replace any instance of `invoke_subgraph` in your code with `mark_compile_region`. This change is necessary as `invoke_subgraph` is deprecated and `mark_compile_region` provides a more efficient compilation process.
+
+What are the new utility functions related to `mark_compile_region`?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Two new utility functions have been introduced: `is_invoke_subgraph` and `build_invoke_subgraph_variable`. These functions help in identifying and constructing variables related to the deprecated `invoke_subgraph`, aiding in the transition to `mark_compile_region`.
+
+What is `invoke_subgraph_placeholder`?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+`invoke_subgraph_placeholder` is a placeholder function added for compatibility with Dynamo. It ensures that workflows relying on the deprecated `invoke_subgraph` are not disrupted during the transition to `mark_compile_region`.
+
 2. ``torch.compile(..., backend="aot_eager")``
    which runs TorchDynamo to capture a forward graph, and then AOTAutograd
    to trace the backward graph without any additional backend compiler

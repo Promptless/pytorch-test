@@ -909,7 +909,8 @@ In a similar way where ``__torch_function__`` is able to interpose on all of tor
 Most of these functions are defined in ``native_functions.yaml`` which specifies the properties of these functions as well as their backend implementation. Their implementation alongside specified features are then automatically registered via codegen.
 Some more exotic functions or features are also registered in other places in the C++ codebase or in user-defined C++ extensions.
 
-It is also possible to add `new` native functions using :mod:`torch.library`. This Python feature allows defining and/or adding new implementations to native functions. This can be used to add missing kernels, replace existing ones or define brand new native functions.
+It is also possible to add `new` native functions using :mod:`torch.library`. This Python feature allows defining and/or adding new implementations to native functions. This can be used to add missing kernels, replace existing ones or define brand new native functions.```
+
 
 You can find many examples of ``__torch_dispatch__``-based subclasses in the `subclass zoo <https://github.com/albanD/subclass_zoo>`_ repo.
 
@@ -978,6 +979,7 @@ Here is an example that shows logging modes of each type::
       f()
 
 Which prints the following, with extra comments::
+```
 
   TorchFunctionMode logging:
   Function Log: torch.rand(*(10,), **{'requires_grad': True})
